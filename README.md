@@ -1,205 +1,171 @@
-# Deployment-Guide-React-Vite-Frontend-Node.js-Backend-with-PM2-Nginx-and-SSL
+# React + Node.js Full Deployment Guide
 
-This README provides a step-by-step reference for deploying a full-stack application (React/Vite frontend + Node.js backend) on a Linux server (Ubuntu). It includes explanations for every step, common issues, and their resolutions. You can save this in your GitHub repository for future deployments.
+This document provides a **step-by-step guide to deploy a React + Vite frontend and Node.js backend** with PM2, Nginx, and SSL. It includes **server setup, directory structure, SSH setup, PM2 process management, Nginx configuration, SSL setup, Stripe integration, common issues, and solutions**.
 
-Table of Contents
+---
 
-Server Setup
+## Table of Contents
 
-Directory Structure
+1. Server Setup
+2. Directory Structure
+3. SSH Key Setup
+4. Backend Setup
+5. Frontend Setup
+6. PM2 Process Management
+7. Nginx Setup
+8. SSL with Let's Encrypt
+9. Stripe Integration / API Testing
+10. Common Issues & Solutions
+11. Notes on Backend Subdomain
 
-SSH Key Setup
+---
 
-Backend Setup
+## 1️⃣ Server Setup
 
-Frontend Setup
-
-PM2 Process Management
-
-Nginx Setup
-
-SSL with Let's Encrypt
-
-Stripe Integration / API Testing
-
-Common Issues & Solutions
-
-1️⃣ Server Setup
-
-SSH login to server
-
+```bash
 ssh root@<SERVER_IP>
+```
 
+* Update server:
 
-Update packages and install dependencies
-
+```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install nginx git curl build-essential -y
+```
 
+**Explanation:**
 
-Explanation:
+* `nginx` → web server
+* `git` → clone repositories
+* `curl` → test APIs
+* `build-essential` → needed for Node.js modules
 
-ssh root@... → login to server
+---
 
-apt update/upgrade → ensures system is up-to-date
+## 2️⃣ Directory Structure
 
-nginx → web server to serve frontend and proxy backend
-
-git → to clone your project
-
-curl → to test API endpoints
-
-build-essential → needed for Node.js modules compilation
-
-2️⃣ Directory Structure
-
-We create a clean directory structure for frontend and backend:
-
+```bash
 sudo mkdir -p /var/brooklyngroup/frontend
 sudo mkdir -p /var/brooklyngroup/backend
+```
 
+* `/var/brooklyngroup/frontend` → store frontend build
+* `/var/brooklyngroup/backend` → store backend code
 
-Explanation:
+---
 
-/var → standard folder for web services
-
-Separate frontend and backend avoids conflicts
-
-3️⃣ SSH Key Setup for GitHub
+## 3️⃣ SSH Key Setup for GitHub
 
 Generate SSH key:
 
+```bash
 ssh-keygen -t ed25519 -C "your_email@example.com"
+```
 
+Add public key to GitHub:
 
-Press enter to save at default location: /root/.ssh/id_ed25519
-
-Copy public key:
-
+```bash
 cat ~/.ssh/id_ed25519.pub
+```
 
+**Common Issues:**
 
-Add this key to your GitHub account → allows server to clone repos without password.
+* `Passphrase mismatch` → re-enter carefully
+* `Key exists` → overwrite or create new file
 
-Common Issues:
+---
 
-Passphrase does not match → carefully type the same passphrase twice or leave blank.
-
-Key already exists → you can overwrite or create a new file name.
-
-4️⃣ Backend Setup
+## 4️⃣ Backend Setup
 
 Clone backend repo:
 
+```bash
 cd /var/brooklyngroup/backend
 git clone git@github.com:yourusername/backend.git .
-
-
-Install dependencies:
-
 npm install
-
+```
 
 Test backend locally:
 
+```bash
 npm start
-# OR
-node index.js
-
-
-Test API:
-
 curl http://127.0.0.1:5000/api
+```
 
+Expected output:
 
-Expected response:
-
+```json
 {"success":true,"message":"server is running"}
+```
 
+---
 
-Common Issues:
-
-502 Bad Gateway → backend not running → start with PM2
-
-Port in use → change backend port in .env
-
-5️⃣ Frontend Setup
+## 5️⃣ Frontend Setup
 
 Clone frontend repo:
 
+```bash
 cd /var/brooklyngroup/frontend
 git clone git@github.com:yourusername/frontend.git .
-
-
-Install dependencies:
-
 npm install
-
+```
 
 Build production:
 
+```bash
 npm run build
-# generates /dist folder
+```
 
+Serve with PM2:
 
-Test dev server with PM2 (optional):
-
-pm2 start npm --name "frontend" -- run dev
-
-
-Serve production build:
-
+```bash
 npm install -g serve
 pm2 start serve --name "frontend" -- -s /var/brooklyngroup/frontend/dist -l 8080
+```
 
+---
 
-Explanation:
+## 6️⃣ PM2 Process Management
 
-npm run build → prepares optimized static files
+Start backend:
 
-serve → serves production build via PM2 (or use Nginx for production)
-
-6️⃣ PM2 Process Management
-
-Start backend with PM2:
-
+```bash
 cd /var/brooklyngroup/backend
 pm2 start npm --name "backend" -- start
+```
 
+Check running processes:
 
-Check status:
-
+```bash
 pm2 list
+```
 
+View logs:
 
-Logs:
-
+```bash
 pm2 logs backend
-
+```
 
 Auto-start on reboot:
 
+```bash
 pm2 save
 pm2 startup
+```
 
+---
 
-Common Issues:
+## 7️⃣ Nginx Setup
 
-pid N/A → backend not actually started, check start script
+Edit default site config:
 
-After logout, PM2 keeps processes running
-
-Always use pm2 save to persist list
-
-7️⃣ Nginx Setup
-
-Default Nginx config:
-
+```bash
 sudo nano /etc/nginx/sites-available/default
+```
 
+Example configuration:
 
-Example config:
-
+```nginx
 server {
     listen 80;
     server_name pay.brooklyngroup.com;
@@ -223,57 +189,56 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    # Security headers
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
     add_header X-XSS-Protection "1; mode=block";
 }
+```
 
+Test and reload Nginx:
 
-Test Nginx:
-
+```bash
 sudo nginx -t
 sudo systemctl reload nginx
+```
 
+---
 
-Common Issues:
-
-502 Bad Gateway → backend not running
-
-301 Moved Permanently → trailing slash /api → use /api/ or both blocks
-
-8️⃣ SSL with Let’s Encrypt
+## 8️⃣ SSL with Let's Encrypt
 
 Install Certbot:
 
+```bash
 sudo apt install certbot python3-certbot-nginx -y
-
+```
 
 Issue certificate:
 
+```bash
 sudo certbot --nginx -d pay.brooklyngroup.com
-
+```
 
 Test auto-renew:
 
+```bash
 sudo certbot renew --dry-run
+```
 
+**Explanation:** SSL avoids Mixed Content issues with Stripe.
 
-Explanation:
+---
 
-SSL avoids Mixed Content errors with Stripe payments
+## 9️⃣ Stripe Integration / API Testing
 
-Certbot automatically updates Nginx config for HTTPS
+Frontend call:
 
-9️⃣ Stripe Integration / API Testing
-
-Frontend calls backend:
-
+```ts
 axios.post("https://pay.brooklyngroup.com/api/v1/create-payment-intent")
+```
 
+Backend route example:
 
-Backend example:
-
+```js
 app.post("/api/v1/create-payment-intent", async (req, res) => {
   const paymentIntent = await stripe.paymentIntents.create({
     amount: 1000,
@@ -281,28 +246,138 @@ app.post("/api/v1/create-payment-intent", async (req, res) => {
   });
   res.json({ clientSecret: paymentIntent.client_secret });
 });
-
+```
 
 Test backend:
 
+```bash
 curl -X POST https://pay.brooklyngroup.com/api/v1/create-payment-intent
+```
 
-🔧 10️⃣ Common Issues & How to Resolve
-Issue	Cause	Solution
-502 Bad Gateway	Backend not running	pm2 start backend
-301 Moved Permanently	Trailing slash /api	Use /api/ or add both /api and /api/ in Nginx
-Mixed Content	Frontend HTTPS calls backend HTTP	Use Nginx proxy + SSL for backend (/api/)
-Backend returns 200 but Stripe not working	Placeholder response	Implement /create-payment-intent route
-PM2 shows pid N/A	Incorrect start command	Use pm2 start npm --name backend -- start
-Processes die on logout	PM2 not set up properly	pm2 save && pm2 startup
-✅ Tips for Future Deployments
+---
 
-Always start backend first → then frontend
+## 10️⃣ Common Issues & Solutions
 
-Always test backend locally (curl http://127.0.0.1:PORT/api)
+| Issue                                | Cause                             | Solution                                    |
+| ------------------------------------ | --------------------------------- | ------------------------------------------- |
+| 502 Bad Gateway                      | Backend not running               | Start backend with PM2                      |
+| 301 Moved Permanently                | Trailing slash `/api`             | Use `/api/` in Nginx proxy                  |
+| Mixed Content                        | Frontend HTTPS calls backend HTTP | Use Nginx proxy + SSL                       |
+| Backend returns 200 but Stripe fails | Placeholder route                 | Implement `/create-payment-intent` properly |
+| PM2 shows pid N/A                    | Backend not started               | Correct PM2 start command                   |
+| Processes die on logout              | PM2 not saved                     | `pm2 save && pm2 startup`                   |
 
-Nginx proxies must match backend port
+---
 
-SSL must be applied to avoid Mixed Content errors
+## 11️⃣ Notes on Backend Subdomain
 
-Save PM2 state (pm2 save) to survive reboots
+* Ideally backend should have a separate subdomain (`api.brooklyngroup.com`).
+* If client does not provide it, backend will run on `/api/` path via Nginx reverse proxy.
+* All frontend API calls must use `/api/` path.
+* PM2 backend process continues running on the assigned port (e.g., 5000).
+
+
+If your client wants to add a subdomain api.brooklyngroup.com so your backend can run on it, here’s a step-by-step explanation you can give them. This does not require you to touch the frontend yet, only DNS and Nginx configuration.
+
+1️⃣ Add the Subdomain in DNS
+
+Ask your client to log in to their domain registrar (e.g., GoDaddy, Namecheap, Cloudflare).
+
+Navigate to DNS Management / Zone File for brooklyngroup.com.
+
+Add a new A record:
+
+Field	Value
+Type	A
+Name	api
+Value	138.197.93.190 (server IP)
+TTL	1 hour (default)
+
+Explanation:
+
+api.brooklyngroup.com will point to the same server as pay.brooklyngroup.com.
+
+Wait for DNS propagation (~5–15 minutes).
+
+2️⃣ Update Nginx for the Subdomain
+
+Once the subdomain is active, SSH into your server and create a new Nginx site configuration for the backend:
+
+sudo nano /etc/nginx/sites-available/api.brooklyngroup.com
+
+
+Example configuration:
+
+server {
+    listen 80;
+    server_name api.brooklyngroup.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+}
+
+
+Save and exit.
+
+3️⃣ Enable the Site
+sudo ln -s /etc/nginx/sites-available/api.brooklyngroup.com /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+
+
+nginx -t → check syntax
+
+systemctl reload nginx → apply configuration
+
+4️⃣ Add SSL with Let’s Encrypt
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx -d api.brooklyngroup.com
+
+
+Follow prompts to get SSL certificate
+
+This enables https://api.brooklyngroup.com
+
+5️⃣ Update Frontend API Calls
+
+Change frontend calls from /api/... to:
+
+axios.post("https://api.brooklyngroup.com/v1/create-payment-intent")
+
+
+Now backend is fully separated on a subdomain, which avoids path conflicts and 502 / 301 issues.
+
+✅ Result:
+
+Frontend: https://pay.brooklyngroup.com
+
+Backend API: https://api.brooklyngroup.com
+
+SSL enabled for both domains
+
+Nginx proxies requests securely
+---
+
+This guide can now serve as a **full reference for deploying any React + Node.js project** with SSL and payment integration.
+
+```
+
+---
+
+I can also **generate a downloadable `.md` file** ready to save locally.  
+
+Do you want me to create it so you can **download it directly from this chat**?
+
+```
